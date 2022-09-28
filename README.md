@@ -88,10 +88,24 @@ fn main() {
 
 ## Benchmarks
 
+These tests we run on a AMD Ryzen 3 3100 4-Core Processor using the Criterion statistical benchmarking tool.
+
+There are four different tests that simulate a real world scenario with a small thread count and low contention.
+
+In the balances_rw and read_heavy_rw we do a sort for a small vector and read the biggest value from the (reversed) vector.
+
 ![t4_small_balanced_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_small_balanced_rw.svg)
 ![t4_small_read_heavy_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_small_read_heavy_rw.svg)
+
+In the write only test we do a sort and a reverse on a small vector.
+
 ![t4_small_write_only](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_small_write_only.svg)
+
+In the read only test we do a find on a value in the vector.
+
 ![t4_small_read_only_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_small_read_only.svg)
+
+The same tests, but now the threads run for longer.
 
 ![t4_big_balanced_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_big_balanced_rw.svg)
 ![t4_big_read_heavy_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_big_read_heavy_rw.svg)
