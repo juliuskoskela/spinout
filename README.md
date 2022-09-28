@@ -88,12 +88,12 @@ fn main() {
 
 ## Benchmarks
 
-![t4_small_balanced_rw](https://github.com/juliuskoskela/spinout/tree/master/img/t4_small_balanced_rw.svg)
-![t4_small_read_heavy_rw](https://github.com/juliuskoskela/spinout/tree/master/img/t4_small_read_heavy_rw.svg)
-![t4_small_write_only](https://github.com/juliuskoskela/spinout/tree/master/img/t4_small_write_only.svg)
-![t4_small_read_only_rw](https://github.com/juliuskoskela/spinout/tree/master/img/t4_small_read_only_rw.svg)
+![t4_small_balanced_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_small_balanced_rw.svg)
+![t4_small_read_heavy_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_small_read_heavy_rw.svg)
+![t4_small_write_only](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_small_write_only.svg)
+![t4_small_read_only_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_small_read_only.svg)
 
-![t4_big_balanced_rw](https://github.com/juliuskoskela/spinout/tree/master/img/t4_big_balanced_rw.svg)
-![t4_big_read_heavy_rw](https://github.com/juliuskoskela/spinout/tree/master/img/t4_big_read_heavy_rw.svg)
-![t4_big_write_only](https://github.com/juliuskoskela/spinout/tree/master/img/t4_big_write_only.svg)
-![t4_big_read_only_rw](https://github.com/juliuskoskela/spinout/tree/master/img/t4_big_read_only_rw.svg)
+![t4_big_balanced_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_big_balanced_rw.svg)
+![t4_big_read_heavy_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_big_read_heavy_rw.svg)
+![t4_big_write_only](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_big_write_only.svg)
+![t4_big_read_only_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_big_read_only.svg)
