@@ -1,757 +1,379 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput, BenchmarkId};
-use atom::Atom;
+use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use spinout::Atom;
+use std::sync::{Arc, Mutex, RwLock};
+const UNSORTED_ARR: [i32; 20] = [9, 1, 8, 2, 7, 3, 6, 4, 5, 0, 9, 1, 42, 2, 7, 3, 6, 4, 5, 0];
 
-fn bench_write_heavy_small_op(c: &mut Criterion) {
-	let b = 1000;
-
-	let mut group = c.benchmark_group("write_heavy_small_op");
-	for (i, size) in [b, 2 * b, 4 * b].iter().enumerate() {
-		group.throughput(Throughput::Elements(*size as u64));
-
-
-		group.bench_with_input(BenchmarkId::new("atom", size), &i, |b, _| {
-			b.iter(|| {
-				black_box({
-					let atom = Atom::new(vec![0, 0]);
-					let t1_atom = atom.clone();
-					let t2_atom = atom.clone();
-					let t3_atom = atom.clone();
-					let t4_atom = atom.clone();
-					let t1 = std::thread::spawn(move || {
-						for _ in 0..1000 {
-							t1_atom.mutate(|x| x[0] += 1);
-						}
-					});
-					let t2 = std::thread::spawn(move || {
-						for _ in 0..1000 {
-							t2_atom.mutate(|x| x[1] += 2);
-						}
-					});
-					let t3 = std::thread::spawn(move || {
-						for _ in 0..1000 {
-							t3_atom.mutate(|x| x[0] += 3);
-						}
-					});
-					let t4 = std::thread::spawn(move || {
-						for _ in 0..1000 {
-							t4_atom.mutate(|x| x[1] += 4);
-						}
-					});
-					t1.join().unwrap();
-					t2.join().unwrap();
-					t3.join().unwrap();
-					t4.join().unwrap();
+macro_rules ! make_test_rw {
+	($name:ident, $tcnt:expr, $modulo:expr, $multiplier:expr) => {
+		fn $name(c: &mut Criterion) {
+			let name = stringify!($name);
+			let mut group = c.benchmark_group(name);
+			for i in [1, 2, 4, 8].iter() {
+				group.bench_with_input(BenchmarkId::new("ATOM", $multiplier * i), &i, |b, _| {
+					b.iter(|| {
+						black_box({
+							atom_test_rw($tcnt, *i * $multiplier, $modulo);
+						})
+					})
 				});
-			})
-		});
 
-		group.bench_with_input(BenchmarkId::new("arc + mutex", size), &i, |b, _| {
-			b.iter(|| {
-				black_box({
-					let arc = std::sync::Arc::new(std::sync::Mutex::new(vec![0, 0]));
-					let t1_arc = arc.clone();
-					let t2_arc = arc.clone();
-					let t3_arc = arc.clone();
-					let t4_arc = arc.clone();
-					let t1 = std::thread::spawn(move || {
-						for _ in 0..1000 {
-							let mut x = t1_arc.lock().unwrap();
-							x[0] += 1;
-						}
-					});
-					let t2 = std::thread::spawn(move || {
-						for _ in 0..1000 {
-							let mut x = t2_arc.lock().unwrap();
-							x[1] += 2;
-						}
-					});
-					let t3 = std::thread::spawn(move || {
-						for _ in 0..1000 {
-							let mut x = t3_arc.lock().unwrap();
-							x[0] += 3;
-						}
-					});
-					let t4 = std::thread::spawn(move || {
-						for _ in 0..1000 {
-							let mut x = t4_arc.lock().unwrap();
-							x[1] += 4;
-						}
-					});
-					t1.join().unwrap();
-					t2.join().unwrap();
-					t3.join().unwrap();
-					t4.join().unwrap();
+				group.bench_with_input(BenchmarkId::new("MUTEX", $multiplier * i), &i, |b, _| {
+					b.iter(|| {
+						black_box({
+							mutex_test_rw($tcnt, *i * $multiplier, $modulo);
+						})
+					})
 				});
-			})
-		});
 
-		group.bench_with_input(BenchmarkId::new("arc + rwlock", size), &i, |b, _| {
-			b.iter(|| {
-				black_box({
-					let arc = std::sync::Arc::new(std::sync::RwLock::new(vec![0, 0]));
-					let t1_arc = arc.clone();
-					let t2_arc = arc.clone();
-					let t3_arc = arc.clone();
-					let t4_arc = arc.clone();
-					let t1 = std::thread::spawn(move || {
-						for _ in 0..1000 {
-							let mut x = t1_arc.write().unwrap();
-							x[0] += 1;
-						}
-					});
-					let t2 = std::thread::spawn(move || {
-						for _ in 0..1000 {
-							let mut x = t2_arc.write().unwrap();
-							x[1] += 2;
-						}
-					});
-					let t3 = std::thread::spawn(move || {
-						for _ in 0..1000 {
-							let mut x = t3_arc.write().unwrap();
-							x[0] += 3;
-						}
-					});
-					let t4 = std::thread::spawn(move || {
-						for _ in 0..1000 {
-							let mut x = t4_arc.write().unwrap();
-							x[1] += 4;
-						}
-					});
-					t1.join().unwrap();
-					t2.join().unwrap();
-					t3.join().unwrap();
-					t4.join().unwrap();
+				group.bench_with_input(BenchmarkId::new("RWLOCK", $multiplier * i), &i, |b, _| {
+					b.iter(|| {
+						black_box({
+							rwlock_test_rw($tcnt, *i * $multiplier, $modulo);
+						})
+					})
 				});
-			})
-		});
-	}
-
-	group.finish();
+			}
+			group.finish();
+		}
+	};
 }
 
-fn bench_read_heavy_small_op(c: &mut Criterion) {
-	let b = 1000;
-
-	let mut group = c.benchmark_group("read_heavy_small_op");
-	for (i, size) in [b, 2 * b, 4 * b].iter().enumerate() {
-		group.throughput(Throughput::Elements(*size as u64));
-
-
-		group.bench_with_input(BenchmarkId::new("atom", size), &i, |b, _| {
-			b.iter(|| {
-				black_box({
-					let atom = Atom::new(vec![0, 0]);
-					let t1_atom = atom.clone();
-					let t2_atom = atom.clone();
-					let t3_atom = atom.clone();
-					let t4_atom = atom.clone();
-					let t1 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..1000 {
-							if i % 10 == 0 {
-								t1_atom.mutate(|x| x[0] += 1);
-							} else {
-								let value = t1_atom.get();
-								tvec.push(value);
-							}
-						}
-					});
-					let t2 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..1000 {
-							if i % 10 == 0 {
-								t2_atom.mutate(|x| x[1] += 2);
-							} else {
-								let value = t2_atom.get();
-								tvec.push(value);
-							}
-						}
-					});
-					let t3 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..1000 {
-							if i % 10 == 0 {
-								t3_atom.mutate(|x| x[0] += 3);
-							} else {
-								let value = t3_atom.get();
-								tvec.push(value);
-							}
-						}
-					});
-					let t4 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..1000 {
-							if i % 10 == 0 {
-								t4_atom.mutate(|x| x[1] += 4);
-							} else {
-								let value = t4_atom.get();
-								tvec.push(value);
-							}
-						}
-					});
-					t1.join().unwrap();
-					t2.join().unwrap();
-					t3.join().unwrap();
-					t4.join().unwrap();
+macro_rules ! make_test_r {
+	($name:ident, $tcnt:expr, $multiplier:expr) => {
+		fn $name(c: &mut Criterion) {
+			let name = stringify!($name);
+			let mut group = c.benchmark_group(name);
+			for i in [1, 2, 4, 8].iter() {
+				group.bench_with_input(BenchmarkId::new("ATOM", $multiplier * i), &i, |b, _| {
+					b.iter(|| {
+						black_box({
+							atom_test_r($tcnt, $multiplier * i);
+						})
+					})
 				});
-			})
-		});
 
-		group.bench_with_input(BenchmarkId::new("arc + mutex", size), &i, |b, _| {
-			b.iter(|| {
-				black_box({
-					let arc = std::sync::Arc::new(std::sync::Mutex::new(vec![0, 0]));
-					let t1_arc = arc.clone();
-					let t2_arc = arc.clone();
-					let t3_arc = arc.clone();
-					let t4_arc = arc.clone();
-					let t1 = std::thread::spawn(move || {
-						let mut tvec: Vec<i32> = Vec::new();
-						for i in 0..1000 {
-							if i % 10 == 0 {
-								match t1_arc.lock() {
-									Ok(mut x) => x[0] += 1,
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t1_arc.lock() {
-									Ok(value) => tvec.push(value.clone()[0]),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					let t2 = std::thread::spawn(move || {
-						let mut tvec: Vec<i32> = Vec::new();
-						for i in 0..1000 {
-							if i % 10 == 0 {
-								match t2_arc.lock() {
-									Ok(mut x) => x[1] += 2,
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t2_arc.lock() {
-									Ok(value) => tvec.push(value.clone()[1]),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					let t3 = std::thread::spawn(move || {
-						let mut tvec: Vec<i32> = Vec::new();
-						for i in 0..1000 {
-							if i % 10 == 0 {
-								match t3_arc.lock() {
-									Ok(mut x) => x[0] += 3,
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t3_arc.lock() {
-									Ok(value) => tvec.push(value.clone()[0]),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					let t4 = std::thread::spawn(move || {
-						let mut tvec: Vec<i32> = Vec::new();
-						for i in 0..1000 {
-							if i % 10 == 0 {
-								match t4_arc.lock() {
-									Ok(mut x) => x[1] += 4,
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t4_arc.lock() {
-									Ok(value) => tvec.push(value.clone()[1]),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					t1.join().unwrap();
-					t2.join().unwrap();
-					t3.join().unwrap();
-					t4.join().unwrap();
+				group.bench_with_input(BenchmarkId::new("MUTEX", $multiplier * i), &i, |b, _| {
+					b.iter(|| {
+						black_box({
+							mutex_test_r($tcnt, $multiplier * i);
+						})
+					})
 				});
-			})
-		});
 
-		group.bench_with_input(BenchmarkId::new("arc + rwlock", size), &i, |b, _| {
-			b.iter(|| {
-				black_box({
-					let arc = std::sync::Arc::new(std::sync::RwLock::new(vec![0, 0]));
-					let t1_arc = arc.clone();
-					let t2_arc = arc.clone();
-					let t3_arc = arc.clone();
-					let t4_arc = arc.clone();
-					let t1 = std::thread::spawn(move || {
-						let mut tvec: Vec<i32> = Vec::new();
-						for i in 0..1000 {
-							if i % 10 == 0 {
-								match t1_arc.write() {
-									Ok(mut x) => x[0] += 1,
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t1_arc.read() {
-									Ok(value) => tvec.push(value.clone()[0]),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					let t2 = std::thread::spawn(move || {
-						let mut tvec: Vec<i32> = Vec::new();
-						for i in 0..1000 {
-							if i % 10 == 0 {
-								match t2_arc.write() {
-									Ok(mut x) => x[1] += 2,
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t2_arc.read() {
-									Ok(value) => tvec.push(value.clone()[1]),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					let t3 = std::thread::spawn(move || {
-						let mut tvec: Vec<i32> = Vec::new();
-						for i in 0..1000 {
-							if i % 10 == 0 {
-								match t3_arc.write() {
-									Ok(mut x) => x[0] += 3,
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t3_arc.read() {
-									Ok(value) => tvec.push(value.clone()[0]),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					let t4 = std::thread::spawn(move || {
-						let mut tvec: Vec<i32> = Vec::new();
-						for i in 0..1000 {
-							if i % 10 == 0 {
-								match t4_arc.write() {
-									Ok(mut x) => x[1] += 4,
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t4_arc.read() {
-									Ok(value) => tvec.push(value.clone()[1]),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					t1.join().unwrap();
-					t2.join().unwrap();
-					t3.join().unwrap();
-					t4.join().unwrap();
+				group.bench_with_input(BenchmarkId::new("RWLOCK", $multiplier * i), &i, |b, _| {
+					b.iter(|| {
+						black_box({
+							rwlock_test_r($tcnt, $multiplier * i);
+						})
+					})
 				});
-			})
-		});
-	}
-
-	group.finish();
+			}
+			group.finish();
+		}
+	};
 }
 
-fn fib(n: u64) -> u64 {
-	if n <= 1 {
-		return n;
-	}
-	fib(n - 1) + fib(n - 2)
+macro_rules ! make_test_w {
+	($name:ident, $tcnt:expr, $multiplier:expr) => {
+		fn $name(c: &mut Criterion) {
+			let name = stringify!($name);
+			let mut group = c.benchmark_group(name);
+			for i in [1, 2, 4, 8].iter() {
+				group.bench_with_input(BenchmarkId::new("ATOM", $multiplier * i), &i, |b, _| {
+					b.iter(|| {
+						black_box({
+							atom_test_w($tcnt, $multiplier * i);
+						})
+					})
+				});
+
+				group.bench_with_input(BenchmarkId::new("MUTEX", $multiplier * i), &i, |b, _| {
+					b.iter(|| {
+						black_box({
+							mutex_test_w($tcnt, $multiplier * i);
+						})
+					})
+				});
+
+				group.bench_with_input(BenchmarkId::new("RWLOCK", $multiplier * i), &i, |b, _| {
+					b.iter(|| {
+						black_box({
+							rwlock_test_w($tcnt, $multiplier * i);
+						})
+					})
+				});
+			}
+			group.finish();
+		}
+	};
 }
 
-fn bench_read_heavy_big_op(c: &mut Criterion) {
-	let b = 1000;
+fn atom_test_rw(tcnt: usize, iters: usize, modulo: usize) {
+	let atom = Atom::new(UNSORTED_ARR.to_vec());
 
-	let mut group = c.benchmark_group("read_heavy_big_op");
-	for (i, size) in [b, 2 * b, 4 * b].iter().enumerate() {
-		group.throughput(Throughput::Elements(*size as u64));
-
-
-		group.bench_with_input(BenchmarkId::new("atom", size), &i, |b, _| {
-			b.iter(|| {
-				black_box({
-					let atom = Atom::new(vec![0, 0]);
-					let t1_atom = atom.clone();
-					let t2_atom = atom.clone();
-					let t3_atom = atom.clone();
-					let t4_atom = atom.clone();
-					let t1 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..50 {
-							if i % 10 == 0 {
-								t1_atom.mutate(|x| {x[0] += fib(20)});
-							} else {
-								let value = t1_atom.get();
-								tvec.push(value);
-							}
-						}
+	let mut threads = Vec::new();
+	for _ in 0..tcnt {
+		let tatom = atom.clone();
+		threads.push(std::thread::spawn(move || {
+			for i in 0..iters {
+				if i % modulo == 0 {
+					tatom.lock(|x| {
+						x.sort();
+						x.reverse();
 					});
-					let t2 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..50 {
-							if i % 10 == 0 {
-								t2_atom.mutate(|x| {x[1] += fib(20)});
-							} else {
-								let value = t2_atom.get();
-								tvec.push(value);
-							}
-						}
-					});
-					let t3 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..50 {
-							if i % 10 == 0 {
-								t3_atom.mutate(|x| {x[0] += fib(20)});
-							} else {
-								let value = t3_atom.get();
-								tvec.push(value);
-							}
-						}
-					});
-					let t4 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..50 {
-							if i % 10 == 0 {
-								t4_atom.mutate(|x| {x[1] += fib(20)});
-							} else {
-								let value = t4_atom.get();
-								tvec.push(value);
-							}
-						}
-					});
-					t1.join().unwrap();
-					t2.join().unwrap();
-					t3.join().unwrap();
-					t4.join().unwrap();
-				})
-			});
-		});
-
-		group.bench_with_input(BenchmarkId::new("arc + mutex", size), &i, |b, _| {
-			b.iter(|| {
-				black_box({
-					use std::sync::{Arc, Mutex};
-					let arc = Arc::new(Mutex::new(vec![0, 0]));
-					let t1_arc = arc.clone();
-					let t2_arc = arc.clone();
-					let t3_arc = arc.clone();
-					let t4_arc = arc.clone();
-					let t1 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..50 {
-							if i % 10 == 0 {
-								match t1_arc.lock() {
-									Ok(mut x) => {x[0] += fib(20)},
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t1_arc.lock() {
-									Ok(value) => tvec.push(value.clone()),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					let t2 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..50 {
-							if i % 10 == 0 {
-								match t2_arc.lock() {
-									Ok(mut x) => {x[1] += fib(20)},
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t2_arc.lock() {
-									Ok(value) => tvec.push(value.clone()),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					let t3 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..50 {
-							if i % 10 == 0 {
-								match t3_arc.lock() {
-									Ok(mut x) => {x[0] += fib(20)},
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t3_arc.lock() {
-									Ok(value) => tvec.push(value.clone()),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					let t4 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..50 {
-							if i % 10 == 0 {
-								match t4_arc.lock() {
-									Ok(mut x) => {x[1] += fib(20)},
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t4_arc.lock() {
-									Ok(value) => tvec.push(value.clone()),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					t1.join().unwrap();
-					t2.join().unwrap();
-					t3.join().unwrap();
-					t4.join().unwrap();
+				}
+				tatom.lock(|x| {
+					let y = x.get(0);
+					match y {
+						Some(fortytwo) => { assert_eq!(fortytwo, &42); },
+						None => {},
+					}
 				});
-			})
-		});
-
-		group.bench_with_input(BenchmarkId::new("arc + rwlock", size), &i, |b, _| {
-			b.iter(|| {
-				black_box({
-					use std::sync::{Arc, RwLock};
-					let arc = Arc::new(RwLock::new(vec![0, 0]));
-					let t1_arc = arc.clone();
-					let t2_arc = arc.clone();
-					let t3_arc = arc.clone();
-					let t4_arc = arc.clone();
-					let t1 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..50 {
-							if i % 10 == 0 {
-								match t1_arc.write() {
-									Ok(mut x) => {x[0] += fib(20)},
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t1_arc.read() {
-									Ok(value) => tvec.push(value.clone()),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					let t2 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..50 {
-							if i % 10 == 0 {
-								match t2_arc.write() {
-									Ok(mut x) => {x[1] += fib(20)},
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t2_arc.read() {
-									Ok(value) => tvec.push(value.clone()),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					let t3 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..50 {
-							if i % 10 == 0 {
-								match t3_arc.write() {
-									Ok(mut x) => {x[0] += fib(20)},
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t3_arc.read() {
-									Ok(value) => tvec.push(value.clone()),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					let t4 = std::thread::spawn(move || {
-						let mut tvec = Vec::new();
-						for i in 0..50 {
-							if i % 10 == 0 {
-								match t4_arc.write() {
-									Ok(mut x) => {x[1] += fib(20)},
-									Err(_) => panic!("lock failed"),
-								}
-							} else {
-								match t4_arc.read() {
-									Ok(value) => tvec.push(value.clone()),
-									Err(_) => panic!("lock failed"),
-								}
-							}
-						}
-					});
-					t1.join().unwrap();
-					t2.join().unwrap();
-					t3.join().unwrap();
-					t4.join().unwrap();
-				});
-			})
-		});
+			}
+		}));
 	}
-
-	group.finish();
+	for thread in threads {
+		thread.join().unwrap();
+	}
 }
 
-fn bench_write_heavy_big_op(c: &mut Criterion) {
-	let b = 1000;
+fn atom_test_w(tcnt: usize, iters: usize) {
+	let atom = Atom::new(UNSORTED_ARR.to_vec());
 
-	let mut group = c.benchmark_group("read_heavy_big_op");
-	for (i, size) in [b, 2 * b, 4 * b].iter().enumerate() {
-		group.throughput(Throughput::Elements(*size as u64));
-
-
-		group.bench_with_input(BenchmarkId::new("atom", size), &i, |b, _| {
-			b.iter(|| {
-				black_box({
-					let atom = Atom::new(vec![0, 0]);
-					let t1_atom = atom.clone();
-					let t2_atom = atom.clone();
-					let t3_atom = atom.clone();
-					let t4_atom = atom.clone();
-					let t1 = std::thread::spawn(move || {
-						for _ in 0..50 {
-							t1_atom.mutate(|x| {x[0] += fib(20)});
-						}
-					});
-					let t2 = std::thread::spawn(move || {
-						for _ in 0..50 {
-							t2_atom.mutate(|x| {x[1] += fib(20)});
-						}
-					});
-					let t3 = std::thread::spawn(move || {
-						for _ in 0..50 {
-							t3_atom.mutate(|x| {x[0] += fib(20)});
-						}
-					});
-					let t4 = std::thread::spawn(move || {
-						for _ in 0..50 {
-							t4_atom.mutate(|x| {x[1] += fib(20)});
-						}
-					});
-					t1.join().unwrap();
-					t2.join().unwrap();
-					t3.join().unwrap();
-					t4.join().unwrap();
-				})
-			});
-		});
-
-		group.bench_with_input(BenchmarkId::new("arc + mutex", size), &i, |b, _| {
-			b.iter(|| {
-				black_box({
-					use std::sync::{Arc, Mutex};
-					let arc = Arc::new(Mutex::new(vec![0, 0]));
-					let t1_arc = arc.clone();
-					let t2_arc = arc.clone();
-					let t3_arc = arc.clone();
-					let t4_arc = arc.clone();
-					let t1 = std::thread::spawn(move || {
-						for _ in 0..50 {
-							match t1_arc.lock() {
-								Ok(mut x) => {x[0] += fib(20)},
-								Err(_) => panic!("lock failed"),
-							}
-						}
-					});
-					let t2 = std::thread::spawn(move || {
-						for _ in 0..50 {
-							match t2_arc.lock() {
-								Ok(mut x) => {x[1] += fib(20)},
-								Err(_) => panic!("lock failed"),
-							}
-						}
-					});
-					let t3 = std::thread::spawn(move || {
-						for _ in 0..50 {
-							match t3_arc.lock() {
-								Ok(mut x) => {x[0] += fib(20)},
-								Err(_) => panic!("lock failed"),
-							}
-						}
-					});
-					let t4 = std::thread::spawn(move || {
-						for _ in 0..50 {
-							match t4_arc.lock() {
-								Ok(mut x) => {x[1] += fib(20)},
-								Err(_) => panic!("lock failed"),
-							}
-						}
-					});
-					t1.join().unwrap();
-					t2.join().unwrap();
-					t3.join().unwrap();
-					t4.join().unwrap();
+	let mut threads = Vec::new();
+	for _ in 0..tcnt {
+		let tatom = atom.clone();
+		threads.push(std::thread::spawn(move || {
+			for _ in 0..iters {
+				tatom.lock(|x| {
+					x.sort();
+					x.reverse();
 				});
-			})
-		});
-
-		group.bench_with_input(BenchmarkId::new("arc + rwlock", size), &i, |b, _| {
-			b.iter(|| {
-				black_box({
-					use std::sync::{Arc, RwLock};
-					let arc = Arc::new(RwLock::new(vec![0, 0]));
-					let t1_arc = arc.clone();
-					let t2_arc = arc.clone();
-					let t3_arc = arc.clone();
-					let t4_arc = arc.clone();
-					let t1 = std::thread::spawn(move || {
-						for _ in 0..50 {
-							match t1_arc.write() {
-								Ok(mut x) => {x[0] += fib(20)},
-								Err(_) => panic!("lock failed"),
-							}
-						}
-					});
-					let t2 = std::thread::spawn(move || {
-						for _ in 0..50 {
-							match t2_arc.write() {
-								Ok(mut x) => {x[1] += fib(20)},
-								Err(_) => panic!("lock failed"),
-							}
-						}
-					});
-					let t3 = std::thread::spawn(move || {
-						for _ in 0..50 {
-							match t3_arc.write() {
-								Ok(mut x) => {x[0] += fib(20)},
-								Err(_) => panic!("lock failed"),
-							}
-						}
-					});
-					let t4 = std::thread::spawn(move || {
-						for _ in 0..50 {
-							match t4_arc.write() {
-								Ok(mut x) => {x[1] += fib(20)},
-								Err(_) => panic!("lock failed"),
-							}
-						}
-					});
-					t1.join().unwrap();
-					t2.join().unwrap();
-					t3.join().unwrap();
-					t4.join().unwrap();
-				});
-			})
-		});
+			}
+		}));
 	}
-
-	group.finish();
+	for thread in threads {
+		thread.join().unwrap();
+	}
 }
+
+fn atom_test_r(tcnt: usize, iters: usize) {
+	let atom = Atom::new(UNSORTED_ARR.to_vec());
+
+	let mut threads = Vec::new();
+	for _ in 0..tcnt {
+		let tatom = atom.clone();
+		threads.push(std::thread::spawn(move || {
+			for _ in 0..iters {
+				let y = tatom.map(|x| x.iter().find(|x| **x == 42).unwrap().clone());
+				assert_eq!(y, 42);
+			}
+		}));
+	}
+	for thread in threads {
+		thread.join().unwrap();
+	}
+}
+
+fn rwlock_test_rw(tcnt: usize, iters: usize, modulo: usize) {
+	let arc = Arc::new(RwLock::new(UNSORTED_ARR.to_vec()));
+
+	let mut threads = Vec::new();
+	for _ in 0..tcnt {
+		let tarc = arc.clone();
+		threads.push(std::thread::spawn(move || {
+			for i in 0..iters {
+				if i % modulo == 0 {
+					match tarc.write() {
+						Ok(mut x) => {
+							x.sort();
+							x.reverse();
+						},
+						Err(_) => panic!("lock failed"),
+					}
+				}
+				match tarc.read() {
+					Ok(x) => {
+						let y = x.get(0);
+						match y {
+							Some(fortytwo) => { assert_eq!(fortytwo, &42); },
+							None => {},
+						}
+					},
+					Err(_) => panic!("lock failed"),
+				}
+			}
+		}));
+	}
+	for thread in threads {
+		thread.join().unwrap();
+	}
+}
+
+fn rwlock_test_w(tcnt: usize, iters: usize) {
+	let arc = Arc::new(RwLock::new(UNSORTED_ARR.to_vec()));
+
+	let mut threads = Vec::new();
+	for _ in 0..tcnt {
+		let tarc = arc.clone();
+		threads.push(std::thread::spawn(move || {
+			for _ in 0..iters {
+				match tarc.write() {
+					Ok(mut x) => {
+						x.sort();
+						x.reverse();
+					},
+					Err(_) => panic!("lock failed"),
+				}
+			}
+		}));
+	}
+	for thread in threads {
+		thread.join().unwrap();
+	}
+}
+
+fn rwlock_test_r(tcnt: usize, iters: usize) {
+	let arc = Arc::new(RwLock::new(UNSORTED_ARR.to_vec()));
+
+	let mut threads = Vec::new();
+	for _ in 0..tcnt {
+		let tarc = arc.clone();
+		threads.push(std::thread::spawn(move || {
+			for _ in 0..iters {
+				match tarc.read() {
+					Ok(x) => {
+						let y = x.iter().find(|x| **x == 42).unwrap().clone();
+						assert_eq!(y, 42);
+					},
+					Err(_) => panic!("lock failed"),
+				}
+			}
+		}));
+	}
+	for thread in threads {
+		thread.join().unwrap();
+	}
+}
+
+fn mutex_test_rw(tcnt: usize, iters: usize, modulo: usize) {
+	let arc = Arc::new(Mutex::new(UNSORTED_ARR.to_vec()));
+
+	let mut threads = Vec::new();
+	for _ in 0..tcnt {
+		let tarc = arc.clone();
+		threads.push(std::thread::spawn(move || {
+			for i in 0..iters {
+				if i % modulo == 0 {
+					match tarc.lock() {
+						Ok(mut x) => {
+							x.sort();
+							x.reverse();
+						},
+						Err(_) => panic!("lock failed"),
+					}
+				}
+				match tarc.lock() {
+					Ok(x) => {
+						let y = x.get(0);
+						match y {
+							Some(fortytwo) => { assert_eq!(fortytwo, &42); },
+							None => {},
+						}
+					},
+					Err(_) => panic!("lock failed"),
+				}
+			}
+		}));
+	}
+	for thread in threads {
+		thread.join().unwrap();
+	}
+}
+
+fn mutex_test_w(tcnt: usize, iters: usize) {
+	let arc = Arc::new(Mutex::new(UNSORTED_ARR.to_vec()));
+
+	let mut threads = Vec::new();
+	for _ in 0..tcnt {
+		let tarc = arc.clone();
+		threads.push(std::thread::spawn(move || {
+			for _ in 0..iters {
+				match tarc.lock() {
+					Ok(mut x) => {
+						x.sort();
+						x.reverse();
+					},
+					Err(_) => panic!("lock failed"),
+				}
+			}
+		}));
+	}
+	for thread in threads {
+		thread.join().unwrap();
+	}
+}
+
+fn mutex_test_r(tcnt: usize, iters: usize) {
+	let arc = Arc::new(Mutex::new(UNSORTED_ARR.to_vec()));
+
+	let mut threads = Vec::new();
+	for _ in 0..tcnt {
+		let tarc = arc.clone();
+		threads.push(std::thread::spawn(move || {
+			for _ in 0..iters {
+				match tarc.lock() {
+					Ok(x) => {
+						let y = x.iter().find(|x| **x == 42).unwrap().clone();
+						assert_eq!(y, 42);
+					},
+					Err(_) => panic!("lock failed"),
+				}
+			}
+		}));
+	}
+	for thread in threads {
+		thread.join().unwrap();
+	}
+}
+
+// make_test_rw!(t1_small_balanced_rw, 1, 1, 10);
+// make_test_rw!(t1_small_read_heavy_rw, 1, 10, 10);
+// make_test_r!(t1_small_read_only, 1, 10);
+// make_test_w!(t1_small_write_only, 1, 10);
+
+// make_test_rw!(t1_big_balanced_rw, 1, 1, 1000);
+// make_test_rw!(t1_big_read_heavy_rw, 1, 10, 1000);
+// make_test_r!(t1_big_read_only, 1, 1000);
+// make_test_w!(t1_big_write_only, 1, 1000);
+
+make_test_rw!(t4_small_balanced_rw, 4, 1, 10);
+make_test_rw!(t4_small_read_heavy_rw, 4, 10, 10);
+make_test_r!(t4_small_read_only, 4, 10);
+make_test_w!(t4_small_write_only, 4, 10);
+
+make_test_rw!(t4_big_balanced_rw, 4, 1, 1000);
+make_test_rw!(t4_big_read_heavy_rw, 4, 10, 1000);
+make_test_r!(t4_big_read_only, 4, 1000);
+make_test_w!(t4_big_write_only, 4, 1000);
 
 criterion_group!(benches,
-	bench_read_heavy_small_op,
-	bench_write_heavy_small_op,
-	bench_read_heavy_big_op,
-	bench_write_heavy_big_op,
+	// t1_small_balanced_rw,
+	// t1_small_read_heavy_rw,
+	// t1_small_read_only,
+	// t1_small_write_only,
+	// t1_big_balanced_rw,
+	// t1_big_read_heavy_rw,
+	// t1_big_read_only,
+	// t1_big_write_only,
+	t4_small_balanced_rw,
+	t4_small_read_heavy_rw,
+	t4_small_read_only,
+	t4_small_write_only,
+	t4_big_balanced_rw,
+	t4_big_read_heavy_rw,
+	t4_big_read_only,
+	t4_big_write_only,
 );
+
 criterion_main!(benches);
