@@ -145,4 +145,11 @@ fn main() {
 	list.push_back(10);
 	list.push_back(11);
 	list.push_back(12);
+
+	let x = vec![1, 2, 3];
+
+	// Slice last 2 elements
+	let y = &x[1..];
+
+	assert_eq!(y, &[2, 3]);
 }

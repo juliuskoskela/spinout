@@ -1,6 +1,6 @@
 [package]
 name = "spinout"
-version = "0.0.11"
+version = "0.0.12"
 edition = "2021"
 readme = "README.md"
 license = "MIT/Apache-2.0"
@@ -11,13 +11,14 @@ A thread-safe clonable and mutable smart-pointer akin to `Arc<Mutex<T>>`,
 using spin-lock instead of system futex.
 """
 
-repository = "https://github.com/juliuskoskela/gdsl"
+repository = "https://github.com/juliuskoskela/spinout"
 
 keywords = ["data-structures", "concurrency", "parallel", "smart-pointer"]
 categories = ["data-structures", "concurrency"]
 
 [dev-dependencies]
 criterion = { version = "0.4.0", features = ["html_reports"] }
+rayon = "1.5.3"
 
 [[bench]]
 name = "benches"
