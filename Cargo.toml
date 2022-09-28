@@ -16,6 +16,11 @@ repository = "https://github.com/juliuskoskela/spinout"
 keywords = ["data-structures", "concurrency", "parallel", "smart-pointer"]
 categories = ["data-structures", "concurrency"]
 
+[dependencies]
+libc = "0.2"
+cfg-if = "1.0.0"
+errno = "0.2.8"
+
 [dev-dependencies]
 criterion = { version = "0.4.0", features = ["html_reports"] }
 rayon = "1.5.3"

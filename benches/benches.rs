@@ -402,15 +402,25 @@ make_test_rw!(t4_big_read_heavy_rw, 4, 10, 1000);
 make_test_r!(t4_big_read_only, 4, 1000);
 make_test_w!(t4_big_write_only, 4, 1000);
 
+make_test_rw!(t32_big_balanced_rw, 32, 1, 100);
+make_test_rw!(t32_big_read_heavy_rw, 32, 10, 100);
+make_test_r!(t32_big_read_only, 32, 100);
+make_test_w!(t32_big_write_only, 32, 100);
+
+make_test_rw!(t100_big_balanced_rw, 100, 1, 100);
+make_test_rw!(t100_big_read_heavy_rw, 100, 10, 100);
+make_test_r!(t100_big_read_only, 100, 100);
+make_test_w!(t100_big_write_only, 100, 100);
+
 criterion_group!(benches,
-	t1_small_balanced_rw,
-	t1_small_read_heavy_rw,
-	t1_small_read_only,
-	t1_small_write_only,
-	t1_big_balanced_rw,
-	t1_big_read_heavy_rw,
-	t1_big_read_only,
-	t1_big_write_only,
+	// t1_small_balanced_rw,
+	// t1_small_read_heavy_rw,
+	// t1_small_read_only,
+	// t1_small_write_only,
+	// t1_big_balanced_rw,
+	// t1_big_read_heavy_rw,
+	// t1_big_read_only,
+	// t1_big_write_only,
 	t4_small_balanced_rw,
 	t4_small_read_heavy_rw,
 	t4_small_read_only,
@@ -419,6 +429,16 @@ criterion_group!(benches,
 	t4_big_read_heavy_rw,
 	t4_big_read_only,
 	t4_big_write_only,
+
+	// t32_big_balanced_rw,
+	// t32_big_read_heavy_rw,
+	// t32_big_read_only,
+	// t32_big_write_only,
+
+	// t100_big_balanced_rw,
+	// t100_big_read_heavy_rw,
+	// t100_big_read_only,
+	// t100_big_write_only,
 );
 
 criterion_main!(benches);

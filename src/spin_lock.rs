@@ -1,6 +1,7 @@
 use super::*;
-
-pub struct SpinLock(AtomicBool);
+use std::sync::atomic::AtomicU32;
+use crate::futex::{futex_wait, futex_wake};
+pub struct SpinLock(AtomicU32);
 
 impl SpinLock {
 
@@ -18,7 +19,7 @@ impl SpinLock {
 	/// ```
 	#[inline]
 	pub fn new() -> Self {
-		SpinLock(AtomicBool::new(false))
+		SpinLock(AtomicU32::new(0))
 	}
 
 	/// Lock the `SpinLock`. This is a blocking operation. If the lock is held by another
@@ -47,11 +48,61 @@ impl SpinLock {
 	/// t.join().unwrap();
 	/// ```
 	#[inline]
-	pub fn lock(&self) {
-		while self.0.compare_exchange(false, true, Acquire, Relaxed).is_err() {
-			spin_loop();
-		}
-	}
+    pub fn lock(&self) {
+        if self.0.compare_exchange(0, 1, Acquire, Relaxed).is_err() {
+            self.lock_contended();
+        }
+    }
+
+    #[cold]
+    fn lock_contended(&self) {
+        // Spin first to speed things up if the lock is released quickly.
+        let mut state = self.spin();
+
+        // If it's unlocked now, attempt to take the lock
+        // without marking it as contended.
+        if state == 0 {
+            match self.0.compare_exchange(0, 1, Acquire, Relaxed) {
+                Ok(_) => return, // Locked!
+                Err(s) => state = s,
+            }
+        }
+
+        loop {
+            // Put the lock in contended state.
+            // We avoid an unnecessary write if it as already set to 2,
+            // to be friendlier for the caches.
+            if state != 2 && self.0.swap(2, Acquire) == 0 {
+                // We changed it from 0 to 2, so we just successfully locked it.
+                return;
+            }
+
+            // Wait for the futex to change state, assuming it is still 2.
+            futex_wait(&self.0, 2, None);
+
+            // Spin again after waking up.
+            state = self.spin();
+        }
+    }
+
+	#[inline]
+	fn spin(&self) -> u32 {
+        let mut spin = 100;
+        loop {
+            // We only use `load` (and not `swap` or `compare_exchange`)
+            // while spinning, to be easier on the caches.
+            let state = self.0.load(Relaxed);
+
+            // We stop spinning when the mutex is unlocked (0),
+            // but also when it's contended (2).
+            if state != 1 || spin == 0 {
+                return state;
+            }
+
+			std::thread::sleep(std::time::Duration::from_nanos(1));
+            spin -= 1;
+        }
+    }
 
 	/// Unlock the `SpinLock`. This function will unlock the lock and allow other threads
 	/// to acquire it.
@@ -78,9 +129,20 @@ impl SpinLock {
 	/// t.join().unwrap();
 	/// ```
 	#[inline]
-	pub fn unlock(&self) {
-		self.0.store(false, Release);
-	}
+    pub fn unlock(&self) {
+        if self.0.swap(0, Release) == 2 {
+            // We only wake up one thread. When that thread locks the mutex, it
+            // will mark the mutex as contended (2) (see lock_contended above),
+            // which makes sure that any other waiting threads will also be
+            // woken up eventually.
+            self.wake();
+        }
+    }
+
+    #[cold]
+    fn wake(&self) {
+        futex_wake(&self.0);
+    }
 }
 
 impl Default for SpinLock {

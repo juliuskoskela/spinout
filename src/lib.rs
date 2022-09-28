@@ -1,12 +1,14 @@
 mod spin_lock;
 mod atom;
+mod futex;
+mod timespec;
 pub use spin_lock::SpinLock;
 pub use atom::{Atom, Weak};
 
-use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering::*};
+use std::sync::atomic::{AtomicUsize, Ordering::*};
 use std::ptr::NonNull;
 use std::cell::UnsafeCell;
-use std::hint::spin_loop;
+use std::marker::PhantomData;
 
 #[test]
 fn ut_atom_map() {

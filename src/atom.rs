@@ -19,7 +19,7 @@ struct AtomInner<T: ?Sized> {
 /// ```
 pub struct Atom<T: Send + ?Sized> {
     inner: NonNull<AtomInner<T>>,
-	phantom: std::marker::PhantomData<AtomInner<T>>,
+	phantom: PhantomData<AtomInner<T>>,
 }
 
 impl<T: Send> Atom<T> {
@@ -47,7 +47,7 @@ impl<T: Send> Atom<T> {
 		});
 		Atom {
 			inner: NonNull::new(Box::into_raw(inner)).unwrap(),
-			phantom: std::marker::PhantomData,
+			phantom: PhantomData,
 		}
 	}
 
@@ -184,7 +184,7 @@ impl<T: Send> Clone for Atom<T> {
 		}
 		Atom {
 			inner: self.inner,
-			phantom: std::marker::PhantomData,
+			phantom: PhantomData,
 		}
 	}
 }
@@ -246,7 +246,7 @@ impl<T: Send + ?Sized> Weak<T> {
 			self_ref.count.0.fetch_add(1, AcqRel);
 			Some(Atom {
 				inner: self.inner,
-				phantom: std::marker::PhantomData,
+				phantom: PhantomData,
 			})
 		}
 	}
