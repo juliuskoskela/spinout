@@ -1,6 +1,8 @@
 # Atom
 
-Experimental API for a synchronous and mutable smart-pointer type `Atom<T>`. Includes the associated spin-lock type `SpinLock`.
+**This is an experimental implementation, meaning API might change and bugs might arise.**
+
+Experimental API for a synchronous and mutable smart-pointer type `Atom<T>` and its `Weak<T>` variant. Also includes the associated spin-lock type `SpinLock`.
 
 Unlike `Mutex<T>`, `Atom<T>` does not use system futexes, but instead uses a simple spin-lock. This can be advantageous in cases of low contention i.e. when the lock is only held for a short time and there are few threads competing for the lock.
 
@@ -92,22 +94,15 @@ These tests we run on a AMD Ryzen 3 3100 4-Core Processor using the Criterion st
 
 There are four different tests that simulate a real world scenario with a small thread count and low contention.
 
-In the balances_rw and read_heavy_rw we do a sort for a small vector and read the biggest value from the (reversed) vector.
+In the `Balanced Read and Write` and `Read Heavy Read and Write` we do a sort on a small vector and read the biggest value from the (reversed) vector.
 
-![t4_small_balanced_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_small_balanced_rw.svg)
-![t4_small_read_heavy_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_small_read_heavy_rw.svg)
+![Balanced Read and Write](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_big_balanced_rw.svg)
+![Read Heavy Read and Write](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_big_read_heavy_rw.svg)
 
-In the write only test we do a sort and a reverse on a small vector.
+In `Write Only` only test we do a sort and a reverse on a small vector.
 
-![t4_small_write_only](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_small_write_only.svg)
+![Write Only](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_big_write_only.svg)
 
-In the read only test we do a find on a value in the vector.
+In the `Read Only` test we do a find on a value in the vector.
 
-![t4_small_read_only_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_small_read_only.svg)
-
-The same tests, but now the threads run for longer.
-
-![t4_big_balanced_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_big_balanced_rw.svg)
-![t4_big_read_heavy_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_big_read_heavy_rw.svg)
-![t4_big_write_only](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_big_write_only.svg)
-![t4_big_read_only_rw](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_big_read_only.svg)
+![Read Only](https://raw.githubusercontent.com/juliuskoskela/spinout/master/img/t4_big_read_only.svg)

@@ -152,6 +152,21 @@ impl<T: Send> Atom<T> {
 		data
 	}
 
+	/// Downgrade the `Atom<T>` to a `Weak<T>`. This is a non-blocking operation.
+	/// The `Weak<T>` can be upgraded to an `Atom<T>` using the `upgrade` method.
+	/// If the `Atom<T>` is dropped, the `Weak<T>` will no longer be able to be upgraded and
+	/// will return `None`.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use spinout::Atom;
+	///
+	/// let atom = Atom::new(5);
+	/// let weak = atom.downgrade();
+	/// assert_eq!(atom.get(), weak.upgrade().unwrap().get());
+	/// ```
+	#[inline]
 	pub fn downgrade(&self) -> Weak<T> {
 		let inner = unsafe { self.inner.as_ref() };
 		inner.count.1.fetch_add(1, Relaxed);
@@ -253,4 +268,14 @@ impl<T: ?Sized + Send> Drop for Weak<T> {
 			}
         }
     }
+}
+
+impl<T: ?Sized + Send> Clone for Weak<T> {
+	fn clone(&self) -> Weak<T> {
+		let inner = unsafe { self.inner.as_ref() };
+		inner.count.1.fetch_add(1, Relaxed);
+		Weak {
+			inner: self.inner
+		}
+	}
 }

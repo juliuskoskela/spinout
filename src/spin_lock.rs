@@ -34,16 +34,17 @@ impl SpinLock {
 	/// let lock = Arc::new(SpinLock::new());
 	/// let lock2 = lock.clone();
 	///
-	/// std::thread::spawn(move || {
-	/// 	lock2.lock();
-	/// 	// do something
-	/// 	std::thread::sleep(std::time::Duration::from_millis(100));
-	/// 	lock2.unlock();
+	/// let t = std::thread::spawn(move || {
+	///     lock2.lock();
+	///     // do something
+	///     std::thread::sleep(std::time::Duration::from_millis(100));
+	///     lock2.unlock();
 	/// });
 	///
 	/// lock.lock();
 	/// // do something after the spawned thread has acquired finished.
 	/// lock.unlock();
+	/// t.join().unwrap();
 	/// ```
 	#[inline]
 	pub fn lock(&self) {
@@ -64,19 +65,26 @@ impl SpinLock {
 	/// let lock = Arc::new(SpinLock::new());
 	/// let lock2 = lock.clone();
 	///
-	/// std::thread::spawn(move || {
-	/// 	lock2.lock();
-	/// 	// do something
-	/// 	std::thread::sleep(std::time::Duration::from_millis(100));
-	/// 	lock2.unlock();
+	/// let t = std::thread::spawn(move || {
+	///     lock2.lock();
+	///     // do something
+	///     std::thread::sleep(std::time::Duration::from_millis(100));
+	///     lock2.unlock();
 	/// });
 	///
 	/// lock.lock();
 	/// // do something after the spawned thread has acquired finished.
 	/// lock.unlock();
+	/// t.join().unwrap();
 	/// ```
 	#[inline]
 	pub fn unlock(&self) {
-		self.0.store(false, Relaxed);
+		self.0.store(false, Release);
+	}
+}
+
+impl Default for SpinLock {
+	fn default() -> Self {
+		Self::new()
 	}
 }
