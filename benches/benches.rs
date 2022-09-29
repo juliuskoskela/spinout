@@ -189,6 +189,41 @@ macro_rules ! make_test_rand {
 	};
 }
 
+macro_rules ! make_test_primes {
+	($name:ident, $tcnt:expr, $multiplier:expr) => {
+		fn $name(c: &mut Criterion) {
+			let name = stringify!($name);
+			let mut group = c.benchmark_group(name);
+			for i in [1].iter() {
+				group.bench_with_input(BenchmarkId::new("ATOM", $multiplier * i), &i, |b, _| {
+					b.iter(|| {
+						black_box({
+							atom_test_sieve_primes($tcnt, $multiplier * i);
+						})
+					})
+				});
+
+				group.bench_with_input(BenchmarkId::new("MUTEX", $multiplier * i), &i, |b, _| {
+					b.iter(|| {
+						black_box({
+							mutex_test_sieve_primes($tcnt, $multiplier * i);
+						})
+					})
+				});
+
+				group.bench_with_input(BenchmarkId::new("NORMAL", $multiplier * i), &i, |b, _| {
+					b.iter(|| {
+						black_box({
+							normal_test_sieve_primes($tcnt, $multiplier * i);
+						})
+					})
+				});
+			}
+			group.finish();
+		}
+	};
+}
+
 fn atom_test_rw(tcnt: usize, iters: usize, modulo: usize) {
     let atom = Atom::new(UNSORTED_ARR.to_vec());
 
@@ -482,13 +517,98 @@ fn mutex_test_r(tcnt: usize, iters: usize) {
 	}
 }
 
+fn is_prime(n: u64) -> bool {
+	if n < 2 {
+		return false;
+	}
+	if n == 2 {
+		return true;
+	}
+	if n % 2 == 0 {
+		return false;
+	}
+	let mut i = 3;
+	while i * i <= n {
+		if n % i == 0 {
+			return false;
+		}
+		i += 2;
+	}
+	true
+}
+
+fn atom_test_sieve_primes(tcnt: usize, iters: usize) {
+	let mut numbers = vec![];
+	for i in 0..iters {
+		numbers.push(i as u64);
+	}
+
+	let numbers = Atom::new(numbers);
+	let primes = Atom::new(vec![]);
+
+	let mut threads = Vec::new();
+
+	for _ in 0..tcnt {
+		let tnumbers = numbers.clone();
+		let tprimes = primes.clone();
+		threads.push(std::thread::spawn(move || {
+			while let Some(x) = tnumbers.map_mut(|x| x.pop()) {
+				if is_prime(x) {
+					tprimes.lock(|v| v.push(x));
+				}
+			}
+		}));
+	}
+}
+
+fn mutex_test_sieve_primes(tcnt: usize, iters: usize) {
+	let mut numbers = vec![];
+	for i in 0..iters {
+		numbers.push(i as u64);
+	}
+
+	let numbers = Arc::new(Mutex::new(numbers));
+	let primes = Arc::new(Mutex::new(vec![]));
+
+	let mut threads = Vec::new();
+
+	for _ in 0..tcnt {
+		let tnumbers = numbers.clone();
+		let tprimes = primes.clone();
+		threads.push(std::thread::spawn(move || {
+			while let Some(x) = tnumbers.lock().unwrap().pop() {
+				if is_prime(x) {
+					tprimes.lock().unwrap().push(x);
+				}
+			}
+		}));
+	}
+}
+
+fn normal_test_sieve_primes(tcnt: usize, iters: usize) {
+	let mut numbers = vec![];
+	for i in 0..iters {
+		numbers.push(i as u64);
+	}
+
+	let mut primes = vec![];
+
+	while let Some(x) = numbers.pop() {
+		if is_prime(x) {
+			primes.push(x);
+		}
+	}
+}
+
 make_test_rw!(t16_big_balanced_rw, 16, 1, 10_000);
 make_test_rw!(t16_big_read_heavy_rw, 16, 10, 10_000);
 make_test_r!(t16_big_read_only, 16, 10_000);
 make_test_w!(t16_big_write_only, 16, 10_000);
 make_test_rand!(t16_big_rand, 32, 100);
+make_test_primes!(t8_primes, 8, 10000);
 
 criterion_group!(benches,
+	t8_primes,
 	t16_big_balanced_rw,
 	t16_big_read_heavy_rw,
 	t16_big_read_only,

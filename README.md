@@ -2,9 +2,7 @@
 
 **This is an experimental implementation, meaning API might change and bugs might arise.**
 
-Experimental API for a synchronous and mutable smart-pointer type `Atom<T>` and its `Weak<T>` variant. Also includes the associated spin-lock type `SpinLock`.
-
-Unlike `Mutex<T>`, `Atom<T>` does not use system futexes, but instead uses a simple spin-lock. This can be advantageous in cases of low contention i.e. when the lock is only held for a short time and there are few threads competing for the lock.
+Experimental API for a synchronous and mutable smart-pointer type `Atom<T>` and its `Weak<T>` variant.
 
 ## Usage
 
