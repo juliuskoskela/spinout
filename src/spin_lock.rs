@@ -50,57 +50,20 @@ impl SpinLock {
 	#[inline]
     pub fn lock(&self) {
         if self.0.compare_exchange(0, 1, Acquire, Relaxed).is_err() {
-            self.lock_contended();
-        }
-    }
-
-    #[cold]
-    fn lock_contended(&self) {
-        // Spin first to speed things up if the lock is released quickly.
-        let mut state = self.spin();
-
-        // If it's unlocked now, attempt to take the lock
-        // without marking it as contended.
-        if state == 0 {
-            match self.0.compare_exchange(0, 1, Acquire, Relaxed) {
-                Ok(_) => return, // Locked!
-                Err(s) => state = s,
-            }
-        }
-
-        loop {
-            // Put the lock in contended state.
-            // We avoid an unnecessary write if it as already set to 2,
-            // to be friendlier for the caches.
-            if state != 2 && self.0.swap(2, Acquire) == 0 {
-                // We changed it from 0 to 2, so we just successfully locked it.
-                return;
-            }
-
-            // Wait for the futex to change state, assuming it is still 2.
-            futex_wait(&self.0, 2, None);
-
-            // Spin again after waking up.
-            state = self.spin();
-        }
-    }
-
-	#[inline]
-	fn spin(&self) -> u32 {
-        let mut spin = 100;
-        loop {
-            // We only use `load` (and not `swap` or `compare_exchange`)
-            // while spinning, to be easier on the caches.
-            let state = self.0.load(Relaxed);
-
-            // We stop spinning when the mutex is unlocked (0),
-            // but also when it's contended (2).
-            if state != 1 || spin == 0 {
-                return state;
-            }
-
 			std::thread::sleep(std::time::Duration::from_nanos(1));
-            spin -= 1;
+            let mut state = self.0.load(Relaxed);
+			if state == 0 {
+				match self.0.compare_exchange(0, 1, Acquire, Relaxed) {
+					Ok(_) => return, // Locked!
+					Err(s) => state = s,
+				}
+			}
+
+			while state == 2 || self.0.swap(2, Acquire) != 0 {
+				futex_wait(&self.0, 2, None);
+				std::thread::sleep(std::time::Duration::from_nanos(1));
+				state = self.0.load(Relaxed);
+			}
         }
     }
 

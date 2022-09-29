@@ -17,6 +17,7 @@ use std::time::Duration;
 ///
 /// Returns false on timeout, and true in all other cases.
 #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
+#[cold]
 pub fn futex_wait(futex: &AtomicU32, expected: u32, timeout: Option<Duration>) -> bool {
     use crate::timespec::Timespec;
     use std::ptr::null;

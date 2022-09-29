@@ -1,4 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use rand::Rng;
 use spinout::Atom;
 use std::sync::{Arc, Mutex, RwLock};
 const UNSORTED_ARR: [i32; 20] = [9, 1, 8, 2, 7, 3, 6, 4, 5, 0, 9, 1, 42, 2, 7, 3, 6, 4, 5, 0];
@@ -53,7 +54,7 @@ macro_rules ! make_test_rw {
 		fn $name(c: &mut Criterion) {
 			let name = stringify!($name);
 			let mut group = c.benchmark_group(name);
-			for i in [1, 2, 4, 8].iter() {
+			for i in [1].iter() {
 				group.bench_with_input(BenchmarkId::new("ATOM", $multiplier * i), &i, |b, _| {
 					b.iter(|| {
 						black_box({
@@ -88,7 +89,7 @@ macro_rules ! make_test_r {
 		fn $name(c: &mut Criterion) {
 			let name = stringify!($name);
 			let mut group = c.benchmark_group(name);
-			for i in [1, 2, 4, 8].iter() {
+			for i in [1].iter() {
 				group.bench_with_input(BenchmarkId::new("ATOM", $multiplier * i), &i, |b, _| {
 					b.iter(|| {
 						black_box({
@@ -123,7 +124,7 @@ macro_rules ! make_test_w {
 		fn $name(c: &mut Criterion) {
 			let name = stringify!($name);
 			let mut group = c.benchmark_group(name);
-			for i in [1, 2, 4, 8].iter() {
+			for i in [1].iter() {
 				group.bench_with_input(BenchmarkId::new("ATOM", $multiplier * i), &i, |b, _| {
 					b.iter(|| {
 						black_box({
@@ -153,27 +154,126 @@ macro_rules ! make_test_w {
 	};
 }
 
+macro_rules ! make_test_rand {
+	($name:ident, $tcnt:expr, $multiplier:expr) => {
+		fn $name(c: &mut Criterion) {
+			let name = stringify!($name);
+			let mut group = c.benchmark_group(name);
+			for i in [1].iter() {
+				group.bench_with_input(BenchmarkId::new("ATOM", $multiplier * i), &i, |b, _| {
+					b.iter(|| {
+						black_box({
+							atom_test_random_lock($tcnt, $multiplier * i);
+						})
+					})
+				});
+
+				group.bench_with_input(BenchmarkId::new("MUTEX", $multiplier * i), &i, |b, _| {
+					b.iter(|| {
+						black_box({
+							mutex_test_random_lock($tcnt, $multiplier * i);
+						})
+					})
+				});
+
+				group.bench_with_input(BenchmarkId::new("RWLOCK", $multiplier * i), &i, |b, _| {
+					b.iter(|| {
+						black_box({
+							rwlock_test_random_lock($tcnt, $multiplier * i);
+						})
+					})
+				});
+			}
+			group.finish();
+		}
+	};
+}
+
 fn atom_test_rw(tcnt: usize, iters: usize, modulo: usize) {
-	let atom = Atom::new(UNSORTED_ARR.to_vec());
+    let atom = Atom::new(UNSORTED_ARR.to_vec());
+
+    let mut threads = Vec::new();
+    for _ in 0..tcnt {
+        let tatom = atom.clone();
+        threads.push(std::thread::spawn(move || {
+            for i in 0..iters {
+                if i % modulo == 0 {
+                    tatom.lock(|x| {
+                        merge_sort(x);
+                        x.reverse();
+                    });
+                }
+                tatom.lock(|x| {
+                    let y = x.get(0);
+                    match y {
+                        Some(fortytwo) => { assert_eq!(fortytwo, &42); },
+                        None => {},
+                    }
+                });
+            }
+        }));
+    }
+    for thread in threads {
+        thread.join().unwrap();
+    }
+}
+
+fn atom_test_random_lock(tcnt: usize, iters: usize) {
+    let atoms = vec![Atom::new(0); 3];
+
+    let mut threads = Vec::new();
+    for _ in 0..tcnt {
+        let tatoms = atoms.clone();
+        threads.push(std::thread::spawn(move || {
+            for _ in 0..iters {
+                for atom in tatoms.iter() {
+					atom.lock(|_| {
+						let nap_time = rand::thread_rng().gen::<u64>() % 50;
+						std::thread::sleep(std::time::Duration::from_nanos(nap_time));
+					});
+				}
+            }
+        }));
+    }
+    for thread in threads {
+        thread.join().unwrap();
+    }
+}
+
+fn mutex_test_random_lock(tcnt: usize, iters: usize) {
+	let mutexes = vec![Arc::new(Mutex::new(0)); 3];
 
 	let mut threads = Vec::new();
 	for _ in 0..tcnt {
-		let tatom = atom.clone();
+		let tmutexes = mutexes.clone();
 		threads.push(std::thread::spawn(move || {
-			for i in 0..iters {
-				if i % modulo == 0 {
-					tatom.lock(|x| {
-						merge_sort(x);
-						x.reverse();
-					});
+			for _ in 0..iters {
+				for mutex in tmutexes.iter() {
+					let mut lock = mutex.lock().unwrap();
+					*lock = rand::thread_rng().gen::<u64>() % 50;
+					std::thread::sleep(std::time::Duration::from_nanos(*lock));
 				}
-				tatom.lock(|x| {
-					let y = x.get(0);
-					match y {
-						Some(fortytwo) => { assert_eq!(fortytwo, &42); },
-						None => {},
-					}
-				});
+			}
+		}));
+	}
+	for thread in threads {
+		thread.join().unwrap();
+	}
+}
+
+fn rwlock_test_random_lock(tcnt: usize, iters: usize) {
+	let rwlocks = vec![Arc::new(RwLock::new(0)); 3];
+
+	let mut threads = Vec::new();
+	for _ in 0..tcnt {
+		let trwlocks = rwlocks.clone();
+		threads.push(std::thread::spawn(move || {
+			for _ in 0..iters {
+				for rwlock in trwlocks.iter() {
+					let mut lock = rwlock.write().unwrap();
+					*lock = rand::thread_rng().gen::<u64>() % 50;
+					std::thread::sleep(std::time::Duration::from_nanos(*lock));
+				}
 			}
 		}));
 	}
@@ -382,63 +482,18 @@ fn mutex_test_r(tcnt: usize, iters: usize) {
 	}
 }
 
-make_test_rw!(t1_small_balanced_rw, 1, 1, 10);
-make_test_rw!(t1_small_read_heavy_rw, 1, 10, 10);
-make_test_r!(t1_small_read_only, 1, 10);
-make_test_w!(t1_small_write_only, 1, 10);
-
-make_test_rw!(t1_big_balanced_rw, 1, 1, 1000);
-make_test_rw!(t1_big_read_heavy_rw, 1, 10, 1000);
-make_test_r!(t1_big_read_only, 1, 1000);
-make_test_w!(t1_big_write_only, 1, 1000);
-
-make_test_rw!(t4_small_balanced_rw, 4, 1, 10);
-make_test_rw!(t4_small_read_heavy_rw, 4, 10, 10);
-make_test_r!(t4_small_read_only, 4, 10);
-make_test_w!(t4_small_write_only, 4, 10);
-
-make_test_rw!(t4_big_balanced_rw, 4, 1, 1000);
-make_test_rw!(t4_big_read_heavy_rw, 4, 10, 1000);
-make_test_r!(t4_big_read_only, 4, 1000);
-make_test_w!(t4_big_write_only, 4, 1000);
-
-make_test_rw!(t32_big_balanced_rw, 32, 1, 100);
-make_test_rw!(t32_big_read_heavy_rw, 32, 10, 100);
-make_test_r!(t32_big_read_only, 32, 100);
-make_test_w!(t32_big_write_only, 32, 100);
-
-make_test_rw!(t100_big_balanced_rw, 100, 1, 100);
-make_test_rw!(t100_big_read_heavy_rw, 100, 10, 100);
-make_test_r!(t100_big_read_only, 100, 100);
-make_test_w!(t100_big_write_only, 100, 100);
+make_test_rw!(t16_big_balanced_rw, 16, 1, 10_000);
+make_test_rw!(t16_big_read_heavy_rw, 16, 10, 10_000);
+make_test_r!(t16_big_read_only, 16, 10_000);
+make_test_w!(t16_big_write_only, 16, 10_000);
+make_test_rand!(t16_big_rand, 32, 100);
 
 criterion_group!(benches,
-	// t1_small_balanced_rw,
-	// t1_small_read_heavy_rw,
-	// t1_small_read_only,
-	// t1_small_write_only,
-	// t1_big_balanced_rw,
-	// t1_big_read_heavy_rw,
-	// t1_big_read_only,
-	// t1_big_write_only,
-	t4_small_balanced_rw,
-	t4_small_read_heavy_rw,
-	t4_small_read_only,
-	t4_small_write_only,
-	t4_big_balanced_rw,
-	t4_big_read_heavy_rw,
-	t4_big_read_only,
-	t4_big_write_only,
-
-	// t32_big_balanced_rw,
-	// t32_big_read_heavy_rw,
-	// t32_big_read_only,
-	// t32_big_write_only,
-
-	// t100_big_balanced_rw,
-	// t100_big_read_heavy_rw,
-	// t100_big_read_only,
-	// t100_big_write_only,
+	t16_big_balanced_rw,
+	t16_big_read_heavy_rw,
+	t16_big_read_only,
+	t16_big_write_only,
+	t16_big_rand,
 );
 
 criterion_main!(benches);
