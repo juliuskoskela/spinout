@@ -214,7 +214,7 @@ macro_rules ! make_test_primes {
 				group.bench_with_input(BenchmarkId::new("NORMAL", $multiplier * i), &i, |b, _| {
 					b.iter(|| {
 						black_box({
-							normal_test_sieve_primes($tcnt, $multiplier * i);
+							normal_test_sieve_primes($multiplier * i);
 						})
 					})
 				});
@@ -585,7 +585,7 @@ fn mutex_test_sieve_primes(tcnt: usize, iters: usize) {
 	}
 }
 
-fn normal_test_sieve_primes(tcnt: usize, iters: usize) {
+fn normal_test_sieve_primes(iters: usize) {
 	let mut numbers = vec![];
 	for i in 0..iters {
 		numbers.push(i as u64);
